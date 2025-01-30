@@ -39,7 +39,7 @@ class MultiHeadAttention(nn.Module):
         self.W_q = nn.Linear(embedding_size, embedding_size)
         self.W_k = nn.Linear(embedding_size, embedding_size)
 
-    def split_heads(self, x):
+    def split_heads(self, x: Tensor) -> Tensor:
         """
         This function splits up the attention into multiple layers to improve in 
         identifying the relevancy among words
@@ -88,11 +88,26 @@ class MultiHeadAttention(nn.Module):
         
         return Y
 
+    def mergeHead(self, multi_head: Tensor) -> Tensor:
+        """
+        This function combines the attention output from all the heads
+
+        Args:
+            multi_head (Tensor): the multi-head attention output
+        Returns:
+            Tensor: combined multi-head attention output
+        """
+        batch_size, _, seq_length, dk = multi_head.size()
+        
+        return multi_head.transpose(1, 2).contiguous().view(batch_size, seq_length, self.embedding_size)
 
     def forward(self, K, Q, V):
+        Q = self.split_heads(self.W_q(Q))
+        K = self.split_heads(self.W_k(K))
+        V = self.split_heads(self.W_v(V))
+
+        multiAttention = self.attention(K, Q, V)
+        mergedAttention = self.mergeHead(multiAttention)
 
         pass
-
-
-
 
