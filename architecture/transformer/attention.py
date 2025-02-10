@@ -6,7 +6,7 @@ https://towardsdatascience.com/all-you-need-to-know-about-attention-and-transfor
 import torch
 from torch import nn, Tensor
 
-def selfAttention(V: Tensor) -> Tensor:
+def simpleSelfAttention(V: Tensor) -> Tensor:
     """
         Args: 
             V (Tensor): 1D text embedded vector
@@ -25,6 +25,27 @@ def selfAttention(V: Tensor) -> Tensor:
     
     return Y
     
+class SelfAttention(nn.Module):
+    def __init__(self, embedding_size):
+        super().__init__()
+        self.dim = embedding_size
+        self.W_k = nn.Linear(embedding_size, embedding_size)
+        self.W_v = nn.Linear(embedding_size, embedding_size)
+        self.W_q = nn.Linear(embedding_size, embedding_size)
+
+    def forward(self, context_vectors):
+        # context_vectors is the rich-embedded text with tokenizer convert 
+        # to embeddings plus positional embedding
+        q = self.W_q(context_vectors)
+        k = self.W_k(context_vectors)
+        v = self.W_v(context_vectors)
+
+        attention_score = torch.matmul(q, torch.transpose(k, -2, -1))
+        weighted_attention_score = torch.softmax(attention_score/ self.dim**0.5, dim=-1)
+        
+        return torch.matmul(weighted_attention_score, v)
+
+
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, embedding_size:int, num_heads: int):
@@ -39,7 +60,7 @@ class MultiHeadAttention(nn.Module):
         self.W_q = nn.Linear(embedding_size, embedding_size)
         self.W_k = nn.Linear(embedding_size, embedding_size)
 
-    def split_heads(self, x: Tensor) -> Tensor:
+    def splitHeads(self, x: Tensor) -> Tensor:
         """
         This function splits up the attention into multiple layers to improve in 
         identifying the relevancy among words
@@ -54,6 +75,20 @@ class MultiHeadAttention(nn.Module):
         batch_size, sequence_length, _ = x.size()
 
         return x.view(batch_size, sequence_length, self.num_heads, self.dk).transpose(1, 2)
+
+    def mergeHeads(self, multi_head: Tensor) -> Tensor:
+        """
+        This function combines the attention output from all the heads
+
+        Args:
+            multi_head (Tensor): the multi-head attention output
+        Returns:
+            Tensor: combined multi-head attention output
+        """
+        batch_size, _, seq_length, _ = multi_head.size()
+        
+        #return multi_head.transpose(1, 2).contiguous().view(batch_size, seq_length, self.embedding_size)
+        return multi_head.transpose(1, 2).view(batch_size, seq_length, self.embedding_size)
 
     def attention(self, K, Q, V):
         """
@@ -88,26 +123,19 @@ class MultiHeadAttention(nn.Module):
         
         return Y
 
-    def mergeHead(self, multi_head: Tensor) -> Tensor:
-        """
-        This function combines the attention output from all the heads
-
-        Args:
-            multi_head (Tensor): the multi-head attention output
-        Returns:
-            Tensor: combined multi-head attention output
-        """
-        batch_size, _, seq_length, dk = multi_head.size()
-        
-        return multi_head.transpose(1, 2).contiguous().view(batch_size, seq_length, self.embedding_size)
-
     def forward(self, K, Q, V):
-        Q = self.split_heads(self.W_q(Q))
-        K = self.split_heads(self.W_k(K))
-        V = self.split_heads(self.W_v(V))
+        Q = self.splitHeads(self.W_q(Q))
+        K = self.splitHeads(self.W_k(K))
+        V = self.splitHeads(self.W_v(V))
 
         multiAttention = self.attention(K, Q, V)
-        mergedAttention = self.mergeHead(multiAttention)
+        mergedAttention = self.mergeHeads(multiAttention)
+        return mergedAttention
 
-        pass
+
+
+if __name__ == "__main__":
+    input = torch.randn(4, 6, 9)
+    attention = SelfAttention(embedding_size=9)
+    score = attention(input)
 
