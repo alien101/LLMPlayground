@@ -25,13 +25,13 @@ def simpleSelfAttention(V: Tensor) -> Tensor:
     
     return Y
     
-class SelfAttention(nn.Module):
+class SelfAttentionV2(nn.Module):
     def __init__(self, embedding_size):
         super().__init__()
         self.dim = embedding_size
-        self.W_k = nn.Linear(embedding_size, embedding_size)
-        self.W_v = nn.Linear(embedding_size, embedding_size)
-        self.W_q = nn.Linear(embedding_size, embedding_size)
+        self.W_k = nn.Linear(embedding_size, embedding_size, bias=False)
+        self.W_v = nn.Linear(embedding_size, embedding_size, bias=False)
+        self.W_q = nn.Linear(embedding_size, embedding_size, bias=False)
 
     def forward(self, context_vectors):
         # context_vectors is the rich-embedded text with tokenizer convert 
@@ -45,7 +45,25 @@ class SelfAttention(nn.Module):
         
         return torch.matmul(weighted_attention_score, v)
 
+class SelfAttentionV1(nn.Module):
+    def __init__(self, embedding_size):
+        super().__init__()
+        self.dim = embedding_size
+        self.W_k = nn.Parameter(torch.rand(embedding_size, embedding_size))
+        self.W_v = nn.Parameter(torch.rand(embedding_size, embedding_size))
+        self.W_q = nn.Parameter(torch.rand(embedding_size, embedding_size))
 
+    def forward(self, context_vectors):
+        # context_vectors is the rich-embedded text with tokenizer convert 
+        # to embeddings plus positional embedding
+        q = torch.matmul(context_vectors, self.W_q) # aka. q = context_vectors @ self.W_q
+        k = torch.matmul(context_vectors, self.W_k) # aka. k = context_vectors @ self.W_k
+        v = torch.matmul(context_vectors, self.W_v) # aka. v = context_vectors @ self.W_v
+
+        attention_score = torch.matmul(q, torch.transpose(k, -2, -1))
+        weighted_attention_score = torch.softmax(attention_score/ self.dim**0.5, dim=-1)
+        
+        return torch.matmul(weighted_attention_score, v)
 
 class MultiHeadAttention(nn.Module):
     def __init__(self, embedding_size:int, num_heads: int):
@@ -135,7 +153,23 @@ class MultiHeadAttention(nn.Module):
 
 
 if __name__ == "__main__":
+    torch.manual_seed(42)
     input = torch.randn(4, 6, 9)
-    attention = SelfAttention(embedding_size=9)
-    score = attention(input)
 
+    attentionV1 = SelfAttentionV1(embedding_size=9)
+    attentionV2 = SelfAttentionV2(embedding_size=9)
+    score2 = attentionV2(input)
+    score1 = attentionV1(input)
+    
+    assert torch.all(score1.flatten() != score2.flatten())
+
+    # Exercise 3.1: Assign weights on V2 to V1
+    attentionV1.W_k = nn.Parameter(attentionV2.state_dict()["W_k.weight"].T)#, 1, 0))
+    attentionV1.W_q = nn.Parameter(attentionV2.state_dict()["W_q.weight"].T)#, 1, 0))
+    attentionV1.W_v = nn.Parameter(attentionV2.state_dict()["W_v.weight"].T)#, 1, 0))
+    score2 = attentionV2(input)
+    score1 = attentionV1(input)
+
+    assert torch.all(score1.flatten() == score2.flatten())
+
+    pass
