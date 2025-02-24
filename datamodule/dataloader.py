@@ -1,4 +1,4 @@
-from dataset import GPTDatasetV1
+from datamodule.dataset import GPTDatasetV1
 from torch.utils.data import DataLoader
 import tiktoken
 

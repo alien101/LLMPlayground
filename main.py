@@ -24,7 +24,7 @@ if __name__ == "__main__":
     start_context = "Hello, I am"
     encoded = tokenizer.encode(start_context)
     encoded_tensor = torch.tensor(encoded).unsqueeze(0)
-    output = inference(model=model, 
+    output = greedy_inference(model=model, 
                        idx=encoded_tensor, 
                        max_new_tokens=6,
                        context_size=GPT_CONFIG_124M["context"])

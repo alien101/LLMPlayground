@@ -25,22 +25,56 @@ class GPT(nn.Module):
         logits = self.out(x)
         return logits
 
-def inference(model, idx, max_new_tokens, context_size):
+def greedy_inference(model, idx, max_new_tokens, context_size):
+    model.eval()
     for _ in range(max_new_tokens):
         with torch.no_grad():
             input = idx[:, -context_size:]
-            output = model(input)[:, -1, :] # only want the last time step
-
-        next_token = torch.argmax(output, dim=-1, keepdim=True)
-        idx = torch.cat((idx, next_token), dim=-1)   
+            logits = model(input)[:, -1, :] # only want the last time step
+        probas = torch.softmax(logits, dim=-1)
+        next_token = torch.argmax(probas, dim=-1, keepdim=True)
+        idx = torch.cat((idx, next_token), dim=1)   
     return idx
+
+def generate(model, idx, max_new_tokens, context_size, 
+             temperature=1, topk=None, eos_id=None):
+    model.eval()
+    for _ in range(max_new_tokens):
+        with torch.no_grad():
+            input = idx[:, -context_size:]
+            logits = model(input)[:, -1, :] # only want the last time step
+        if topk is not None:
+            logits = topk_sampling(logits, k=topk)
+        if temperature != 1:
+            probas = softmax_with_temperature(logits=logits, temperature=temperature)
+            next_token = torch.multinomial(probas, num_samples=1)
+        else:
+            next_token = torch.argmax(logits, dim=-1, keepdim=True)
+        if next_token == eos_id:
+            break
+        idx = torch.cat((idx, next_token), dim=1)   
+    return idx
+
+def softmax_with_temperature(logits, temperature):
+    scaled_logits = logits/ temperature
+    return torch.softmax(scaled_logits, dim=-1)
+
+def topk_sampling(logits, k):
+    top_logits, top_pos = torch.topk(logits, k)
+    logits = torch.where(
+        condition=logits < top_logits[:,-1],
+        input=torch.tensor(float('-inf')),
+        other=logits    
+    )
+    return logits
 
 def text_to_token(text, tokenizer):
     encoded = tokenizer.encode(text, allowed_special={'|<endoftext>|'})
-    encoded_tensor = torch.tensor(encoded).unsqueez(0)
+    encoded_tensor = torch.tensor(encoded).unsqueeze(0)
     return encoded_tensor
 
 def token_to_text(token, tokenizer):
     token = token.squeeze(0).tolist()
     text = tokenizer.decode(token)
     return text
+

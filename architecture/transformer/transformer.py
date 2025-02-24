@@ -47,11 +47,12 @@ class TransformerBlock(nn.Module):
             d_out=cfg["emb_dim"],
             context_length=cfg["context"],
             num_heads=cfg["n_head"],
-            dropout=cfg["drop_rate"]
+            dropout=cfg["drop_rate"],
+            bias=cfg["qkv_bias"]
         )
         self.ff = FeedForward(cfg)
-        self.norm1 = nn.LayerNorm(cfg["emb_dim"])
-        self.norm2 = nn.LayerNorm(cfg["emb_dim"])
+        self.norm1 = LayerNorm(cfg["emb_dim"])
+        self.norm2 = LayerNorm(cfg["emb_dim"])
         self.dropout = nn.Dropout(cfg["drop_rate"])
     
     def forward(self, x):
